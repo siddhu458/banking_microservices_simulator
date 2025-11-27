@@ -1,0 +1,95 @@
+services:
+
+  eureka-server:
+    build: ./eurekaServer
+    container_name: eureka-server
+    ports:
+      - "8761:8761"
+    networks:
+      - bank-net
+
+  api-gateway:
+    build: ./apiGateway
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    depends_on:
+      - eureka-server
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_URI: http://eureka-server:8761/eureka/
+    networks:
+      - bank-net
+
+  mongo_accounts:
+    image: mongo:6.0
+    container_name: mongo_accounts
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_accounts_data:/data/db
+    networks:
+      - bank-net
+
+  mongo_transactions:
+    image: mongo:6.0
+    container_name: mongo_transactions
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo_transactions_data:/data/db
+    networks:
+      - bank-net
+
+  account-service:
+    build: ./accountService
+    container_name: account-service
+    depends_on:
+      - eureka-server
+      - mongo_accounts
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATA_MONGODB_URI: mongodb://mongo_accounts:27017/accounts_db
+    networks:
+      - bank-net
+    ports:
+      - "8081:8081"
+
+  transaction-service:
+    build: ./transactionService
+    container_name: transaction-service
+    depends_on:
+      - eureka-server
+      - mongo_transactions
+      - account-service
+      - notification-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATA_MONGODB_URI: mongodb://mongo_transactions:27017/transactions_db
+      EUREKA_URI: http://eureka-server:8761/eureka/
+      ACCOUNT_SERVICE_URI: http://account-service:8081
+      NOTIFICATION_SERVICE_URI: http://notification-service:8083
+    networks:
+      - bank-net
+    ports:
+      - "8082:8082"
+
+  notification-service:
+    build: ./notificationService
+    container_name: notification-service
+    depends_on:
+      - eureka-server
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      EUREKA_URI: http://eureka-server:8761/eureka/
+    networks:
+      - bank-net
+    ports:
+      - "8083:8083"
+
+volumes:
+  mongo_accounts_data:
+  mongo_transactions_data:
+
+networks:
+  bank-net:
